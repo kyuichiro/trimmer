@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>トリマー管理画面 - 登録・シフト設定</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans JP"', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar for a cleaner look */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Toggle Switch Custom CSS */
+        .toggle-checkbox:checked { right: 0; border-color: #22c55e; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #22c55e; }
+        
+        /* Fade in animation */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Toast notification */
+        #toast {
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            transform: translateY(100%);
+            opacity: 0;
+        }
+        #toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-slate-900 text-white flex flex-col transition-all duration-300 z-20 hidden md:flex">
+        <div class="h-16 flex items-center px-6 border-b border-slate-800">
+            <i class="fa-solid fa-dog text-brand-500 text-2xl mr-3"></i>
+            <span class="text-lg font-bold tracking-wider">K・DogSpa Admin</span>
+        </div>
+        
+        <div class="p-6">
+            <div class="flex items-center gap-3 mb-8">
+                <div class="w-10 h-10 rounded-full bg-slate-700 overflow-hidden">
+                    <img src="https://placehold.co/100x100/3b82f6/ffffff?text=佐藤" alt="User" class="w-full h-full object-cover">
+                </div>
+                <div>
+                    <p class="text-sm font-bold">佐藤 トリマー</p>
+                    <p class="text-xs text-slate-400">渋谷店 所属</p>
+                </div>
+            </div>
+
+            <nav class="space-y-2">
+                <button onclick="switchTab('profile')" id="nav-profile" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-brand-600 text-white font-medium transition-colors">
+                    <i class="fa-solid fa-user-pen w-5 text-center"></i>
+                    <span>プロフィール登録</span>
+                </button>
+                <button onclick="switchTab('shift')" id="nav-shift" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white font-medium transition-colors">
+                    <i class="fa-solid fa-calendar-days w-5 text-center"></i>
+                    <span>シフト・枠登録</span>
+                </button>
+            </nav>
+        </div>
+        
+        <div class="mt-auto p-6">
+            <button class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white font-medium transition-colors">
+                <i class="fa-solid fa-arrow-right-from-bracket w-5 text-center"></i>
+                <span>ログアウト</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        <!-- Mobile Header -->
+        <header class="md:hidden h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-10">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-dog text-brand-500 text-xl"></i>
+                <span class="font-bold">K・DogSpa</span>
+            </div>
+            <button class="text-slate-600 p-2"><i class="fa-solid fa-bars text-xl"></i></button>
+        </header>
+
+        <!-- Scrollable Content Area -->
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 relative" id="main-scroll-area">
+            
+            <!-- TAB 1: Profile Registration -->
+            <div id="tab-profile" class="fade-in max-w-6xl mx-auto">
+                <div class="mb-8">
+                    <h1 class="text-2xl font-bold text-slate-900">プロフィール情報登録</h1>
+                    <p class="text-slate-500 mt-1">お客様の予約画面（P-02）に表示される公開プロフィールを設定します。</p>
+                </div>
+
+                <div class="flex flex-col lg:flex-row gap-8">
+                    
+                    <!-- Left Column: Form -->
+                    <div class="flex-1 space-y-6">
+                        
+                        <!-- Basic Info Card -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <h2 class="text-lg font-bold mb-4 flex items-center gap-2 border-b pb-2">
+                                <span class="bg-slate-100 text-slate-600 px-2 py-1 rounded text-sm"><i class="fa-solid fa-address-card"></i> 基本情報</span>
+                            </h2>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-700 mb-1">氏名 <span class="text-red-500 text-xs ml-1">必須</span></label>
+                                    <input type="text" id="input-name" value="佐藤 トリマー" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none" onkeyup="updatePreview()">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-700 mb-1">よみがな</label>
+                                    <input type="text" value="さとう とりまー" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-700 mb-1">トリマー歴 (年)</label>
+                                    <div class="relative">
+                                        <input type="number" id="input-exp" value="5" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none pr-8" oninput="updatePreview()">
+                                        <span class="absolute right-3 top-2.5 text-slate-400 font-medium">年</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Image Settings Card -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <h2 class="text-lg font-bold mb-4 flex items-center gap-2 border-b pb-2">
+                                <span class="bg-slate-100 text-slate-600 px-2 py-1 rounded text-sm"><i class="fa-regular fa-image"></i> 画像設定</span>
+                            </h2>
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-2">プロフィール写真 <span class="text-red-500 text-xs ml-1">必須</span></label>
+                                <div class="flex items-center gap-4">
+                                    <div class="w-20 h-20 rounded-full border-2 border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0">
+                                        <img src="https://placehold.co/100x100/3b82f6/ffffff?text=Face" class="w-full h-full object-cover">
+                                    </div>
+                                    <label class="cursor-pointer bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition">
+                                        画像を選択
+                                        <input type="file" class="hidden" accept="image/*">
+                                    </label>
+                                    <span class="text-xs text-slate-500">推奨サイズ: 400x400px (JPG/PNG)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Appeal & Tags Card -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <h2 class="text-lg font-bold mb-4 flex items-center gap-2 border-b pb-2">
+                                <span class="bg-slate-100 text-slate-600 px-2 py-1 rounded text-sm"><i class="fa-solid fa-tags"></i> アピールタグ</span>
+                            </h2>
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-2">得意な犬種・スタイル</label>
+                                <div class="flex gap-2 mb-3">
+                                    <input type="text" id="tag-input" placeholder="例: トイプードル" class="flex-1 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                                    <button onclick="addTag()" class="bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-700 transition font-medium">追加</button>
+                                </div>
+                                <div id="tag-container" class="flex flex-wrap gap-2">
+                                    <!-- Tags will be dynamically injected here -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Message Card -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <h2 class="text-lg font-bold mb-4 flex items-center gap-2 border-b pb-2">
+                                <span class="bg-slate-100 text-slate-600 px-2 py-1 rounded text-sm"><i class="fa-regular fa-comment-dots"></i> メッセージ</span>
+                            </h2>
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">飼い主様へのメッセージ</label>
+                                <p class="text-xs text-slate-500 mb-2">予約時の指名獲得につながる自己PRを入力してください。（最大200文字）</p>
+                                <textarea id="input-message" rows="4" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none resize-none" onkeyup="updatePreview()">トイプードルのテディベアカットが得意です。優しく丁寧な施術を心がけています！ワンちゃんがリラックスできる空間づくりを大切にしています。</textarea>
+                            </div>
+                        </div>
+
+                        <!-- Save Action -->
+                        <div class="flex justify-end pt-4 pb-12">
+                            <button onclick="saveData('プロフィールを保存しました')" class="bg-brand-600 text-white px-8 py-3 rounded-xl font-bold shadow-md hover:bg-brand-700 transition flex items-center gap-2">
+                                <i class="fa-solid fa-check"></i> プロフィールを保存
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Live Preview -->
+                    <div class="w-full lg:w-80 flex-shrink-0 relative">
+                        <div class="sticky top-8">
+                            <p class="text-sm font-bold text-brand-600 mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-mobile-screen"></i> 予約画面(P-02) プレビュー
+                            </p>
+                            
+                            <!-- Mockup Phone Frame -->
+                            <div class="bg-white rounded-[2rem] border-8 border-slate-800 shadow-xl overflow-hidden h-[600px] flex flex-col">
+                                <div class="bg-slate-100 h-12 flex justify-center items-center font-medium text-sm text-slate-500 border-b border-slate-200">指名選択</div>
+                                <div class="p-4 bg-slate-50 flex-1 overflow-y-auto">
+                                    
+                                    <!-- Dynamic Preview Card -->
+                                    <label class="block bg-white rounded-xl border-2 border-brand-500 overflow-hidden shadow-sm relative cursor-pointer">
+                                        <!-- Selected Badge -->
+                                        <div class="absolute top-2 right-2 bg-brand-500 text-white w-6 h-6 rounded-full flex items-center justify-center z-10 shadow-sm">
+                                            <i class="fa-solid fa-check text-xs"></i>
+                                        </div>
+                                        
+                                        <!-- Card Header (Cover + Avatar) -->
+                                        <div class="h-16 bg-slate-200"></div>
+                                        <div class="px-4 pb-4 relative text-center">
+                                            <div class="w-16 h-16 bg-white rounded-full border-2 border-white absolute -top-8 left-1/2 -translate-x-1/2 overflow-hidden shadow-sm">
+                                                <img src="https://placehold.co/100x100/3b82f6/ffffff?text=Face" class="w-full h-full object-cover">
+                                            </div>
+                                            
+                                            <div class="pt-10">
+                                                <h3 id="prev-name" class="font-bold text-slate-800 text-lg">佐藤 トリマー</h3>
+                                                <div class="mt-1 flex justify-center items-center gap-1">
+                                                    <span class="bg-brand-50 text-brand-700 px-2 py-0.5 rounded text-xs font-bold border border-brand-200">歴 <span id="prev-exp">5</span>年</span>
+                                                </div>
+                                                
+                                                <!-- Dynamic Tags Preview -->
+                                                <div id="prev-tags" class="flex flex-wrap justify-center gap-1 mt-2">
+                                                    <!-- Injected dynamically -->
+                                                </div>
+
+                                                <p id="prev-message" class="text-xs text-slate-600 mt-3 text-left leading-relaxed">
+                                                    トイプードルのテディベアカットが得意です。優しく丁寧な施術を心がけています！ワンちゃんがリラックスできる空間づくりを大切にしています。
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </label>
+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: Shift Registration (S-02) -->
+            <div id="tab-shift" class="hidden fade-in max-w-5xl mx-auto">
+                 <div class="mb-8">
+                    <h1 class="text-2xl font-bold text-slate-900">シフト・受付枠登録 (S-02)</h1>
+                    <p class="text-slate-500 mt-1">店舗ごとの出勤日と、60分単位の受付可能枠を設定します。</p>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+                    
+                    <!-- Shift Control Header -->
+                    <div class="p-6 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row gap-4 justify-between items-center">
+                        <div class="flex items-center gap-4 w-full md:w-auto">
+                            <label class="font-bold text-slate-700 whitespace-nowrap">対象店舗</label>
+                            <select class="p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none w-full md:w-64 bg-white">
+                                <option>K・DogSpa 渋谷本店</option>
+                                <option>K・DogSpa 表参道店</option>
+                            </select>
+                        </div>
+                        
+                        <div class="flex items-center gap-2">
+                            <button class="w-10 h-10 rounded-full border border-slate-300 flex items-center justify-center hover:bg-slate-100 transition"><i class="fa-solid fa-chevron-left text-slate-500"></i></button>
+                            <span class="font-bold text-lg w-32 text-center">2026年 10月</span>
+                            <button class="w-10 h-10 rounded-full border border-slate-300 flex items-center justify-center hover:bg-slate-100 transition"><i class="fa-solid fa-chevron-right text-slate-500"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col md:flex-row">
+                        <!-- Date Picker Grid (Left) -->
+                        <div class="w-full md:w-1/3 border-r border-slate-200 p-6 bg-white">
+                            <h3 class="font-bold text-slate-700 mb-4 text-center">稼働日の選択</h3>
+                            
+                            <div class="grid grid-cols-7 gap-1 text-center mb-2 text-xs font-bold text-slate-500">
+                                <div class="text-red-500">日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div class="text-blue-500">土</div>
+                            </div>
+                            <!-- Mockup Calendar Grid -->
+                            <div class="grid grid-cols-7 gap-1 text-center text-sm" id="calendar-grid">
+                                <!-- Generated by JS -->
+                            </div>
+                            
+                            <div class="mt-6 p-4 bg-amber-50 rounded-lg border border-amber-100">
+                                <p class="text-xs text-amber-800 font-medium"><i class="fa-solid fa-circle-info mr-1"></i> 日付をタップすると、右側にその日の枠設定が表示されます。</p>
+                            </div>
+                        </div>
+
+                        <!-- Time Slots Grid (Right) -->
+                        <div class="flex-1 p-6 bg-slate-50">
+                            <div class="flex justify-between items-end mb-6 border-b border-slate-200 pb-3">
+                                <div>
+                                    <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                                        <i class="fa-regular fa-calendar-check text-brand-500"></i> <span id="selected-date-display">10月15日 (木)</span> の受付枠
+                                    </h3>
+                                    <p class="text-xs text-slate-500 mt-1">※ 60分単位の「トリマーお任せコース」予約枠となります。</p>
+                                </div>
+                                <button class="text-sm font-bold text-brand-600 hover:text-brand-800 transition px-3 py-1 bg-brand-50 rounded-lg">一括ON</button>
+                            </div>
+
+                            <!-- 60min Slots Container -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="slots-container">
+                                <!-- Generated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Save Action -->
+                <div class="flex justify-end pb-12">
+                    <button onclick="saveData('シフト情報をシステムに反映しました')" class="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold shadow-md hover:bg-indigo-700 transition flex items-center gap-2">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> シフト枠を更新する
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Toast Notification (Replaces alerts) -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-slate-900 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 z-50 pointer-events-none">
+        <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+            <i class="fa-solid fa-check text-white"></i>
+        </div>
+        <p id="toast-message" class="font-medium text-sm">保存しました</p>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // --- State Management ---
+        let tags = ['トイプードル', 'テディベアカット', 'シニア犬対応'];
+        const timeSlots = [
+            { time: '10:00 - 11:00', active: true },
+            { time: '11:30 - 12:30', active: true },
+            { time: '13:00 - 14:00', active: false }, // Lunch/Break
+            { time: '14:30 - 15:30', active: true },
+            { time: '16:00 - 17:00', active: true },
+            { time: '17:30 - 18:30', active: false }
+        ];
+
+        // --- Tab Switching Logic ---
+        function switchTab(tabId) {
+            // Update UI contents
+            document.getElementById('tab-profile').classList.add('hidden');
+            document.getElementById('tab-shift').classList.add('hidden');
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+
+            // Update Sidebar styling
+            const navProfile = document.getElementById('nav-profile');
+            const navShift = document.getElementById('nav-shift');
+            
+            if (tabId === 'profile') {
+                navProfile.className = 'w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-brand-600 text-white font-medium transition-colors';
+                navShift.className = 'w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white font-medium transition-colors';
+            } else {
+                navShift.className = 'w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-brand-600 text-white font-medium transition-colors';
+                navProfile.className = 'w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white font-medium transition-colors';
+            }
+            
+            // Scroll to top
+            document.getElementById('main-scroll-area').scrollTop = 0;
+        }
+
+        // --- Profile Logic ---
+        function updatePreview() {
+            const name = document.getElementById('input-name').value || '未入力';
+            const exp = document.getElementById('input-exp').value || '0';
+            const message = document.getElementById('input-message').value || 'メッセージがありません。';
+
+            document.getElementById('prev-name').textContent = name;
+            document.getElementById('prev-exp').textContent = exp;
+            document.getElementById('prev-message').textContent = message;
+        }
+
+        function renderTags() {
+            const container = document.getElementById('tag-container');
+            const prevContainer = document.getElementById('prev-tags');
+            container.innerHTML = '';
+            prevContainer.innerHTML = '';
+
+            tags.forEach((tag, index) => {
+                // Editor Tag
+                const tagEl = document.createElement('div');
+                tagEl.className = 'bg-brand-50 text-brand-700 border border-brand-200 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2';
+                tagEl.innerHTML = `
+                    ${tag}
+                    <button onclick="removeTag(${index})" class="text-brand-400 hover:text-red-500 transition"><i class="fa-solid fa-xmark"></i></button>
+                `;
+                container.appendChild(tagEl);
+
+                // Preview Tag
+                const pTagEl = document.createElement('span');
+                pTagEl.className = 'bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold';
+                pTagEl.textContent = tag;
+                prevContainer.appendChild(pTagEl);
+            });
+        }
+
+        function addTag() {
+            const input = document.getElementById('tag-input');
+            const val = input.value.trim();
+            if (val && tags.length < 10) { // Limit tags
+                tags.push(val);
+                input.value = '';
+                renderTags();
+            }
+        }
+
+        function removeTag(index) {
+            tags.splice(index, 1);
+            renderTags();
+        }
+
+        // Allow pressing Enter to add tag
+        document.getElementById('tag-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') addTag();
+        });
+
+        // --- Shift Logic ---
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-grid');
+            grid.innerHTML = '';
+            
+            // Dummy logic: Start on Thursday (idx 4), 31 days
+            for(let i=0; i<4; i++) grid.innerHTML += `<div class="p-2 opacity-0"></div>`; // padding
+            
+            for(let day=1; day<=31; day++) {
+                const isSelected = day === 15;
+                const isPast = day < 10;
+                let classes = "p-2 rounded-lg font-medium relative cursor-pointer ";
+                
+                if (isPast) {
+                    classes += "text-slate-300 cursor-not-allowed";
+                } else if (isSelected) {
+                    classes += "bg-brand-500 text-white shadow-sm";
+                } else {
+                    classes += "text-slate-700 hover:bg-slate-100";
+                }
+
+                // Add a small dot if there are shifts (dummy visual)
+                let dot = (!isPast && (day%2!==0 || day===15)) ? `<div class="w-1 h-1 bg-green-500 rounded-full mx-auto mt-0.5 ${isSelected?'bg-white':''}"></div>` : '';
+
+                grid.innerHTML += `<div class="${classes}" onclick="${isPast?'':'selectDate('+day+')'}">${day}${dot}</div>`;
+            }
+        }
+
+        function selectDate(day) {
+            document.getElementById('selected-date-display').textContent = `10月${day}日`;
+            // Re-render calendar to show selection (simple refresh)
+            // In a real app, we would manage state better, but this is a mockup
+            setTimeout(renderCalendar, 50); // visual trick for mockup
+        }
+
+        function renderSlots() {
+            const container = document.getElementById('slots-container');
+            container.innerHTML = '';
+
+            timeSlots.forEach((slot, index) => {
+                const el = document.createElement('div');
+                el.className = `flex items-center justify-between p-4 border rounded-xl bg-white transition-all duration-200 ${slot.active ? 'border-brand-200 shadow-sm' : 'border-slate-200 opacity-60'}`;
+                
+                el.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="w-2 h-2 rounded-full ${slot.active ? 'bg-green-500' : 'bg-slate-300'}"></div>
+                        <span class="font-bold ${slot.active ? 'text-slate-800' : 'text-slate-500'}">${slot.time}</span>
+                    </div>
+                    
+                    <div class="relative inline-block w-12 align-middle select-none transition duration-200 ease-in">
+                        <input type="checkbox" name="toggle" id="toggle-${index}" ${slot.active ? 'checked' : ''} onchange="toggleSlot(${index})"
+                            class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300 z-10 top-0 transition-all duration-200"/>
+                        <label for="toggle-${index}" class="toggle-label block overflow-hidden h-6 rounded-full bg-slate-300 cursor-pointer transition-colors duration-200"></label>
+                    </div>
+                `;
+                container.appendChild(el);
+            });
+        }
+
+        function toggleSlot(index) {
+            timeSlots[index].active = !timeSlots[index].active;
+            renderSlots(); // Re-render to update visual state (opacity, dot color)
+        }
+
+        // --- Notification Logic ---
+        function saveData(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').textContent = msg;
+            
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // --- Initialization ---
+        window.onload = () => {
+            updatePreview();
+            renderTags();
+            renderCalendar();
+            renderSlots();
+        };
+    </script>
+</body>
+</html>
