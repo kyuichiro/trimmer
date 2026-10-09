@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>K・DogSpa - ユーザー予約プロトタイプ</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans JP"', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#fdf8f6',
+                            100: '#f2e8e5',
+                            400: '#d97706', // amber-600 like
+                            500: '#b45309', // amber-700 like
+                        },
+                        spa: {
+                            light: '#f0fdfa', // teal-50
+                            dark: '#0f766e',  // teal-700
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #e2e8f0; }
+        
+        /* Mobile App Container */
+        .app-container {
+            max-width: 414px; /* iPhone Max width approx */
+            margin: 0 auto;
+            background-color: #f8fafc;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        /* Screen Transitions */
+        .screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            background: #f8fafc;
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            transform: translateX(100%);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .screen.active {
+            transform: translateX(0);
+            opacity: 1;
+            pointer-events: auto;
+            z-index: 20;
+        }
+        .screen.previous {
+            transform: translateX(-30%);
+            opacity: 0.5;
+            z-index: 10;
+        }
+
+        /* Scrollable content area */
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 100px; /* Space for fixed bottom bar */
+        }
+        .content-area::-webkit-scrollbar { display: none; }
+
+        /* Fixed Bottom Action Bar */
+        .bottom-bar {
+            position: absolute;
+            bottom: 0; left: 0; width: 100%;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+            padding: 16px;
+            padding-bottom: env(safe-area-inset-bottom, 16px);
+            z-index: 30;
+            box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Custom Checkbox/Radio */
+        .custom-radio:checked + div { border-color: #d97706; background-color: #fdf8f6; }
+        .custom-radio:checked + div .radio-icon { color: #d97706; border-color: #d97706; }
+        .custom-radio:checked + div .radio-icon::after { content: ''; position: absolute; width: 10px; height: 10px; background: #d97706; border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+
+        /* Toast */
+        #toast {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100%);
+            background: rgba(15, 23, 42, 0.9); color: white; padding: 12px 24px; border-radius: 30px;
+            font-size: 14px; font-weight: bold; opacity: 0; transition: all 0.3s ease; z-index: 100;
+        }
+        #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    </style>
+</head>
+<body class="text-slate-800 antialiased">
+
+    <div class="app-container">
+        
+        <!-- Global Header (Dynamic per screen) -->
+        <header id="app-header" class="bg-white h-14 flex items-center px-4 border-b border-slate-200 shrink-0 z-30 relative shadow-sm transition-colors duration-300">
+            <button id="btn-back" onclick="goBack()" class="w-10 h-10 flex items-center justify-center text-slate-500 absolute left-2 opacity-0 pointer-events-none transition-opacity">
+                <i class="fa-solid fa-chevron-left text-lg"></i>
+            </button>
+            <div class="flex-1 text-center font-bold text-lg flex justify-center items-center gap-2" id="header-title">
+                <i class="fa-solid fa-dog text-brand-400"></i> K・DogSpa
+            </div>
+        </header>
+
+        <!-- Progress Bar for Booking Phase -->
+        <div id="progress-container" class="bg-white px-6 py-3 border-b border-slate-200 shrink-0 z-30 transition-all duration-300">
+            <div class="flex justify-between items-center relative">
+                <div class="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-slate-100 -z-10 rounded-full"></div>
+                <div id="progress-bar" class="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-brand-400 -z-10 rounded-full transition-all duration-500" style="width: 0%;"></div>
+                
+                <div class="w-6 h-6 rounded-full bg-brand-400 text-white flex items-center justify-center text-xs font-bold step-indicator" data-step="1">1</div>
+                <div class="w-6 h-6 rounded-full bg-slate-200 text-slate-400 flex items-center justify-center text-xs font-bold step-indicator" data-step="2">2</div>
+                <div class="w-6 h-6 rounded-full bg-slate-200 text-slate-400 flex items-center justify-center text-xs font-bold step-indicator" data-step="3">3</div>
+                <div class="w-6 h-6 rounded-full bg-slate-200 text-slate-400 flex items-center justify-center text-xs font-bold step-indicator" data-step="4">4</div>
+                <div class="w-6 h-6 rounded-full bg-slate-200 text-slate-400 flex items-center justify-center text-xs font-bold step-indicator" data-step="5">5</div>
+            </div>
+            <div class="text-center text-[10px] font-bold text-brand-500 mt-1" id="step-label">コース・情報</div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SCREENS DEFINITION                         -->
+        <!-- ========================================== -->
+
+        <div id="P-01" class="screen active" data-title="ご予約" data-step="1" data-label="コース・情報">
+            <div class="content-area p-4 space-y-6">
+                <!-- Course Info -->
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                    <span class="bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded mb-2 inline-block">選択中コース</span>
+                    <h2 class="font-bold text-lg text-brand-500 border-b border-slate-100 pb-2 mb-2">トリマーお任せコース<br><span class="text-xs text-red-500">※要お付き添い</span></h2>
+                    <p class="text-xs text-slate-600 leading-relaxed mb-3">爪切り、耳掃除、肛門腺絞り、足裏カット、低刺激シャンプー、保湿トリートメントの総合ケア。</p>
+                    <div class="flex justify-between items-center text-sm font-bold bg-slate-50 p-2 rounded-lg">
+                        <span><i class="fa-regular fa-clock text-slate-400"></i> 約60分</span>
+                        <span><i class="fa-solid fa-yen-sign text-slate-400"></i> 6,500 <span class="text-xs font-normal">税込</span></span>
+                    </div>
+                </div>
+
+                <!-- Input Forms -->
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-4">
+                    <h3 class="font-bold border-l-4 border-brand-400 pl-2">お客様情報</h3>
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">愛犬のお名前 <span class="text-red-500">*</span></label>
+                        <input type="text" id="input-petName" placeholder="例: ポチ" class="w-full border border-slate-300 rounded-lg p-3 text-sm focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400" oninput="validateP01()">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">犬種 <span class="text-red-500">*</span></label>
+                        <select id="input-breed" class="w-full border border-slate-300 rounded-lg p-3 text-sm bg-white focus:outline-none">
+                            <option>トイプードル</option>
+                            <option>チワワ</option>
+                            <option>ミニチュアダックス</option>
+                            <option>その他小型犬</option>
+                        </select>
+                    </div>
+
+                    <div class="pt-2">
+                        <label class="block text-xs font-bold text-slate-500 mb-1">飼い主様 氏名 <span class="text-red-500">*</span></label>
+                        <input type="text" id="input-ownerName" placeholder="例: 山田 太郎" class="w-full border border-slate-300 rounded-lg p-3 text-sm focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400" oninput="validateP01()">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bottom-bar">
+                <button id="btn-next-p01" onclick="navigateTo('P-02')" disabled class="w-full bg-brand-400 text-white font-bold py-3.5 rounded-xl shadow-md hover:bg-brand-500 transition disabled:opacity-50 disabled:bg-slate-400 flex items-center justify-center gap-2">
+                    日時・指名へ進む <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="P-02" class="screen" data-title="ご予約" data-step="2" data-label="日時・指名">
+            <div class="content-area p-4 space-y-6">
+                
+                <!-- Trimmer Selection -->
+                <div>
+                    <h3 class="font-bold text-sm mb-3 text-slate-700 flex items-center gap-2"><i class="fa-solid fa-scissors"></i> 担当トリマー指名</h3>
+                    <div class="space-y-3">
+                        
+                        <label class="block relative">
+                            <input type="radio" name="trimmer" value="佐藤トリマー" class="custom-radio hidden" onchange="validateP02()">
+                            <div class="border-2 border-slate-200 rounded-xl p-3 flex items-center gap-3 transition">
+                                <div class="w-12 h-12 rounded-full overflow-hidden bg-slate-200 shrink-0">
+                                    <img src="https://placehold.co/100x100/3b82f6/ffffff?text=佐藤" class="w-full h-full object-cover">
+                                </div>
+                                <div class="flex-1">
+                                    <div class="font-bold text-sm">佐藤 トリマー</div>
+                                    <div class="text-[10px] text-slate-500 mt-1">トイプードルのカットが得意です！</div>
+                                </div>
+                                <div class="radio-icon w-5 h-5 rounded-full border-2 border-slate-300 relative shrink-0"></div>
+                            </div>
+                        </label>
+
+                        <label class="block relative">
+                            <input type="radio" name="trimmer" value="鈴木トリマー" class="custom-radio hidden" onchange="validateP02()">
+                            <div class="border-2 border-slate-200 rounded-xl p-3 flex items-center gap-3 transition">
+                                <div class="w-12 h-12 rounded-full overflow-hidden bg-slate-200 shrink-0">
+                                    <img src="https://placehold.co/100x100/ec4899/ffffff?text=鈴木" class="w-full h-full object-cover">
+                                </div>
+                                <div class="flex-1">
+                                    <div class="font-bold text-sm">鈴木 トリマー</div>
+                                    <div class="text-[10px] text-slate-500 mt-1">シニア犬も優しく対応します。</div>
+                                </div>
+                                <div class="radio-icon w-5 h-5 rounded-full border-2 border-slate-300 relative shrink-0"></div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Date & Time -->
+                <div>
+                    <h3 class="font-bold text-sm mb-3 text-slate-700 flex items-center gap-2"><i class="fa-regular fa-calendar-days"></i> ご来店日時</h3>
+                    
+                    <input type="date" id="input-date" class="w-full border border-slate-300 rounded-lg p-3 text-sm bg-white mb-3" onchange="validateP02()">
+                    
+                    <div class="grid grid-cols-2 gap-2" id="time-slots">
+                        <!-- Time buttons generated by JS -->
+                        <button class="time-btn border border-slate-300 rounded-lg py-2 text-sm font-bold text-slate-600 hover:bg-slate-50" onclick="selectTime(this, '10:00')">10:00 - 11:00</button>
+                        <button class="time-btn border border-slate-300 rounded-lg py-2 text-sm font-bold text-slate-600 hover:bg-slate-50" onclick="selectTime(this, '11:30')">11:30 - 12:30</button>
+                        <button class="time-btn border border-slate-300 rounded-lg py-2 text-sm font-bold bg-slate-100 text-slate-400 cursor-not-allowed" disabled>13:00 - 14:00 (×)</button>
+                        <button class="time-btn border border-slate-300 rounded-lg py-2 text-sm font-bold text-slate-600 hover:bg-slate-50" onclick="selectTime(this, '14:30')">14:30 - 15:30</button>
+                    </div>
+                </div>
+
+            </div>
+            
+            <div class="bottom-bar">
+                <button id="btn-next-p02" onclick="navigateTo('P-03')" disabled class="w-full bg-brand-400 text-white font-bold py-3.5 rounded-xl shadow-md hover:bg-brand-500 transition disabled:opacity-50 disabled:bg-slate-400 flex items-center justify-center gap-2">
+                    同席同意へ進む <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="P-03" class="screen bg-red-50/30" data-title="ご予約" data-step="3" data-label="同席同意(重要)">
+            <div class="content-area p-5">
+                
+                <div class="bg-white border-2 border-red-500 rounded-2xl shadow-lg overflow-hidden">
+                    <div class="bg-red-500 text-white text-center py-4">
+                        <i class="fa-solid fa-triangle-exclamation text-3xl mb-2"></i>
+                        <h2 class="font-bold text-lg">重要なお願い</h2>
+                    </div>
+                    
+                    <div class="p-5 space-y-4 text-sm text-slate-700 leading-relaxed">
+                        <p>本コースはワンちゃんの安全確保とリラックスした施術のため、<strong>飼い主様がブース内に常時お立ち会いいただくこと</strong>が利用条件となっております。</p>
+                        
+                        <div class="bg-red-50 p-4 rounded-lg border border-red-100">
+                            <p class="font-bold text-red-700 mb-2 border-b border-red-200 pb-2">【必須条件】</p>
+                            <p class="text-red-900">開始から終了までの約60分間、ブース内でお付き添いをお願いいたします。</p>
+                        </div>
+                        
+                        <p class="text-xs text-slate-500">※お付き添いいただけない場合や途中退室された場合は、安全上の理由から施術を中断させていただく場合がございます。</p>
+                    </div>
+
+                    <div class="p-5 bg-slate-50 border-t border-slate-200">
+                        <label class="flex items-start gap-3 cursor-pointer group">
+                            <div class="relative flex items-start pt-1">
+                                <input type="checkbox" id="check-agreement" class="w-6 h-6 rounded border-slate-300 text-red-600 focus:ring-red-500" onchange="validateP03()">
+                            </div>
+                            <span class="font-bold text-red-700 leading-snug group-hover:text-red-800 transition">
+                                施術中、ブース内で常時同席することに同意します
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+            </div>
+            
+            <div class="bottom-bar">
+                <button id="btn-next-p03" onclick="navigateTo('P-04')" disabled class="w-full bg-red-600 text-white font-bold py-4 rounded-xl shadow-md hover:bg-red-700 transition disabled:opacity-50 disabled:bg-slate-400 flex items-center justify-center gap-2">
+                    同意して決済へ進む <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="P-04" class="screen" data-title="ご予約" data-step="4" data-label="確認・決済">
+            <div class="content-area p-4 space-y-6">
+                
+                <h2 class="font-bold text-lg text-center mb-2">予約内容の最終確認</h2>
+                
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <ul class="divide-y divide-slate-100 text-sm">
+                        <li class="p-4 flex justify-between">
+                            <span class="text-slate-500">コース</span>
+                            <span class="font-bold">お任せコース</span>
+                        </li>
+                        <li class="p-4 flex flex-col items-end gap-1">
+                            <div class="w-full flex justify-between"><span class="text-slate-500">日時</span><span class="font-bold text-brand-500" id="summary-datetime">--</span></div>
+                            <span class="text-xs bg-brand-50 text-brand-600 px-2 py-0.5 rounded">60分枠</span>
+                        </li>
+                        <li class="p-4 flex justify-between">
+                            <span class="text-slate-500">担当</span>
+                            <span class="font-bold" id="summary-trimmer">--</span>
+                        </li>
+                        <li class="p-4 flex justify-between">
+                            <span class="text-slate-500">愛犬</span>
+                            <span class="font-bold" id="summary-pet">--</span>
+                        </li>
+                        <li class="p-4 bg-red-50 flex justify-between items-center">
+                            <span class="text-red-700 font-bold text-xs">同席規約</span>
+                            <span class="font-bold text-red-600 flex items-center gap-1"><i class="fa-solid fa-check-circle"></i> 同意済み</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-sm mb-3 flex items-center gap-2"><i class="fa-regular fa-credit-card"></i> クレジットカード決済</h3>
+                    <div class="space-y-3">
+                        <input type="text" placeholder="カード番号 (ダミー)" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:outline-none">
+                        <div class="flex gap-3">
+                            <input type="text" placeholder="MM/YY" class="w-1/2 bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:outline-none">
+                            <input type="text" placeholder="CVC" class="w-1/2 bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            
+            <div class="bottom-bar">
+                <button onclick="processPayment()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-black transition flex flex-col items-center justify-center relative overflow-hidden">
+                    <span id="pay-btn-text">6,500円を決済して予約確定</span>
+                    <div id="pay-spinner" class="absolute hidden">
+                        <i class="fa-solid fa-circle-notch fa-spin text-xl"></i>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <div id="P-05" class="screen bg-brand-50" data-title="予約完了" data-step="5" data-label="完了">
+            <div class="content-area p-6 flex flex-col items-center text-center pt-12">
+                
+                <div class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center text-white text-4xl mb-6 shadow-lg shadow-green-500/30">
+                    <i class="fa-solid fa-check"></i>
+                </div>
+                
+                <h2 class="font-bold text-2xl text-slate-800 mb-2">ご予約が完了しました</h2>
+                <p class="text-sm text-slate-500 mb-8">予約ID: <span class="font-mono bg-white px-2 py-1 rounded border">#KD-8924</span></p>
+
+                <div class="bg-white w-full rounded-2xl p-5 shadow-sm border border-slate-200 text-left mb-8">
+                    <h3 class="font-bold text-brand-500 mb-3 border-b border-slate-100 pb-2"><i class="fa-solid fa-envelope"></i> 当日のご案内</h3>
+                    <ul class="text-sm text-slate-600 space-y-3 list-disc pl-4">
+                        <li>ご登録のメールアドレスに予約完了メールを送信しました。</li>
+                        <li><strong>予約開始10分前</strong>に「同席確認メール」が届きます。</li>
+                        <li>ご来店後、メール内のURLからマイページを開き、トリマーと一緒に「利用開始」ボタンを押してください。</li>
+                    </ul>
+                </div>
+
+            </div>
+            
+            <div class="bottom-bar bg-transparent border-none">
+                <!-- Jump to Day of Service Simulation -->
+                <button onclick="startDayOfService()" class="w-full bg-spa-dark text-white font-bold py-4 rounded-xl shadow-lg hover:bg-teal-800 transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-mobile-screen"></i> 当日マイページを体験する
+                </button>
+            </div>
+        </div>
+
+        
+        <!-- P-06: Waiting to start -->
+        <div id="P-06" class="screen bg-slate-50" data-title="マイページ (当日)">
+            <div class="content-area p-5 pt-8">
+                <div class="bg-amber-100 text-amber-800 font-bold text-center py-2 px-4 rounded-full text-sm mb-6 shadow-sm border border-amber-200">
+                    【開始前】 同席確認待ち
+                </div>
+
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 mb-8 text-center">
+                    <i class="fa-regular fa-clock text-4xl text-slate-300 mb-3"></i>
+                    <h2 class="font-bold text-lg mb-1">予約時刻が近づいています</h2>
+                    <p class="text-sm text-slate-500">ブースにご入室ください。<br>トリマーと一緒に下記のボタンを押して開始します。</p>
+                </div>
+            </div>
+
+            <div class="bottom-bar bg-white border-t-2 border-spa-dark pb-8 pt-6 rounded-t-3xl shadow-[0_-10px_40px_rgba(15,118,110,0.15)]">
+                <p class="text-xs text-center text-slate-500 mb-4 font-bold">トリマーと相互に確認後、ボタンを押してください</p>
+                <button id="btn-user-start" onclick="userPressStart()" class="w-full bg-spa-dark text-white font-bold text-lg py-5 rounded-2xl shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-hand-pointer"></i> 同席確認・利用開始
+                </button>
+                <p id="msg-waiting-trimmer" class="text-center text-sm font-bold text-brand-500 mt-4 hidden animate-pulse">
+                    トリマーの確認を待っています...
+                </p>
+            </div>
+        </div>
+
+        <!-- P-07: In Progress -->
+        <div id="P-07" class="screen bg-spa-light" data-title="マイページ (施術中)">
+            <div class="content-area p-5 pt-8 flex flex-col h-full">
+                <div class="bg-spa-dark text-white font-bold text-center py-2 px-4 rounded-full text-sm mb-6 shadow-sm">
+                    【施術中】 ブース内同席中
+                </div>
+
+                <div class="bg-white rounded-2xl p-6 shadow-md border border-slate-100 text-center flex-1 flex flex-col justify-center">
+                    <p class="text-sm text-slate-500 font-bold mb-2">残り時間目安</p>
+                    <div class="text-6xl font-mono font-black text-slate-800 tracking-tighter" id="timer-display">59:59</div>
+                    
+                    <div class="mt-8 text-left space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <p class="text-xs font-bold text-slate-400 mb-2 border-b pb-1">現在の進行状況</p>
+                        <div class="flex items-center gap-2 text-sm font-bold text-spa-dark">
+                            <i class="fa-solid fa-check-circle"></i> ヒアリング・状態チェック
+                        </div>
+                        <div class="flex items-center gap-2 text-sm font-bold text-slate-600 animate-pulse">
+                            <i class="fa-solid fa-spinner fa-spin text-slate-400"></i> 爪切り・耳掃除・カット類
+                        </div>
+                        <div class="flex items-center gap-2 text-sm font-bold text-slate-400">
+                            <div class="w-4 h-4 border-2 border-slate-300 rounded-full"></div> シャンプー・トリートメント
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bottom-bar bg-white">
+                <button onclick="userPressEnd()" class="w-full bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg transition active:bg-black">
+                    施術終了・退出確認へ
+                </button>
+            </div>
+        </div>
+
+        <!-- P-08: Complete -->
+        <div id="P-08" class="screen bg-slate-50" data-title="マイページ (完了)">
+            <div class="content-area p-6 flex flex-col items-center justify-center text-center h-full pt-20">
+                <div class="w-24 h-24 bg-slate-200 rounded-full flex items-center justify-center text-slate-400 text-5xl mb-6">
+                    <i class="fa-solid fa-door-open"></i>
+                </div>
+                <h2 class="font-bold text-2xl text-slate-800 mb-2">施術が完了しました</h2>
+                <p class="text-sm text-slate-500 leading-relaxed">
+                    ブースの解放手続きが完了しました。<br>本日はご利用ありがとうございました。
+                </p>
+                <button onclick="location.reload()" class="mt-12 text-sm font-bold text-brand-500 underline">
+                    最初からやり直す (デモ用)
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Custom Toast -->
+    <div id="toast">通知メッセージ</div>
+
+    <script>
+        // --- State Management ---
+        const state = {
+            history: [],
+            currentScreen: 'P-01',
+            booking: {
+                petName: '',
+                breed: '',
+                ownerName: '',
+                trimmer: '',
+                date: '',
+                time: ''
+            }
+        };
+
+        // --- Navigation Logic ---
+        function navigateTo(targetId) {
+            const currentEl = document.getElementById(state.currentScreen);
+            const targetEl = document.getElementById(targetId);
+            
+            // Push to history if moving forward
+            if (state.history[state.history.length - 1] !== state.currentScreen) {
+                state.history.push(state.currentScreen);
+            }
+
+            // Update UI classes for animation
+            currentEl.classList.remove('active');
+            currentEl.classList.add('previous');
+            
+            targetEl.classList.remove('previous');
+            targetEl.classList.add('active');
+
+            state.currentScreen = targetId;
+            updateHeaderAndProgress(targetEl);
+            
+            // Trigger specific screen logic
+            if(targetId === 'P-04') populateSummary();
+        }
+
+        function goBack() {
+            if (state.history.length === 0) return;
+            
+            const prevId = state.history.pop();
+            const currentEl = document.getElementById(state.currentScreen);
+            const prevEl = document.getElementById(prevId);
+
+            currentEl.classList.remove('active');
+            prevEl.classList.remove('previous');
+            prevEl.classList.add('active');
+
+            state.currentScreen = prevId;
+            updateHeaderAndProgress(prevEl);
+        }
+
+        function updateHeaderAndProgress(screenEl) {
+            // Header Title
+            const title = screenEl.getAttribute('data-title');
+            document.getElementById('header-title').innerHTML = title === 'マイページ (当日)' ? '<i class="fa-solid fa-mobile-screen text-spa-dark"></i> ' + title : '<i class="fa-solid fa-dog text-brand-400"></i> ' + title;
+
+            // Back Button visibility
+            const btnBack = document.getElementById('btn-back');
+            if (state.history.length > 0 && !['P-05', 'P-06', 'P-07', 'P-08'].includes(state.currentScreen)) {
+                btnBack.classList.remove('opacity-0', 'pointer-events-none');
+            } else {
+                btnBack.classList.add('opacity-0', 'pointer-events-none');
+            }
+
+            // Progress Bar (Only show for Booking phase P-01 to P-05)
+            const progressContainer = document.getElementById('progress-container');
+            const step = screenEl.getAttribute('data-step');
+            
+            if (step) {
+                progressContainer.style.display = 'block';
+                const stepNum = parseInt(step);
+                const width = ((stepNum - 1) / 4) * 100;
+                document.getElementById('progress-bar').style.width = `${width}%`;
+                document.getElementById('step-label').textContent = screenEl.getAttribute('data-label');
+
+                // Update indicators colors
+                document.querySelectorAll('.step-indicator').forEach(el => {
+                    const elStep = parseInt(el.getAttribute('data-step'));
+                    if (elStep <= stepNum) {
+                        el.className = 'w-6 h-6 rounded-full bg-brand-400 text-white flex items-center justify-center text-xs font-bold step-indicator transition-colors';
+                    } else {
+                        el.className = 'w-6 h-6 rounded-full bg-slate-200 text-slate-400 flex items-center justify-center text-xs font-bold step-indicator transition-colors';
+                    }
+                });
+            } else {
+                // Hide progress in Day of Service mode
+                progressContainer.style.display = 'none';
+                document.getElementById('app-header').classList.remove('bg-white');
+                document.getElementById('app-header').classList.add('bg-spa-light');
+            }
+        }
+
+        // --- Validation Logic (P-01 to P-03) ---
+        function validateP01() {
+            state.booking.petName = document.getElementById('input-petName').value.trim();
+            state.booking.ownerName = document.getElementById('input-ownerName').value.trim();
+            state.booking.breed = document.getElementById('input-breed').value;
+            
+            const btn = document.getElementById('btn-next-p01');
+            btn.disabled = !(state.booking.petName && state.booking.ownerName);
+        }
+
+        let selectedTimeBtn = null;
+        function selectTime(btn, time) {
+            // Visual toggle
+            if (selectedTimeBtn) {
+                selectedTimeBtn.classList.remove('bg-brand-500', 'text-white', 'border-brand-500');
+                selectedTimeBtn.classList.add('text-slate-600', 'hover:bg-slate-50');
+            }
+            btn.classList.remove('text-slate-600', 'hover:bg-slate-50');
+            btn.classList.add('bg-brand-500', 'text-white', 'border-brand-500');
+            selectedTimeBtn = btn;
+            
+            state.booking.time = time;
+            validateP02();
+        }
+
+        function validateP02() {
+            const trimmerSelected = document.querySelector('input[name="trimmer"]:checked');
+            if (trimmerSelected) state.booking.trimmer = trimmerSelected.value;
+            state.booking.date = document.getElementById('input-date').value;
+
+            const btn = document.getElementById('btn-next-p02');
+            btn.disabled = !(state.booking.trimmer && state.booking.date && state.booking.time);
+        }
+
+        function validateP03() {
+            // The critical control feature
+            const isAgreed = document.getElementById('check-agreement').checked;
+            document.getElementById('btn-next-p03').disabled = !isAgreed;
+        }
+
+        // --- Data Binding & Processing ---
+        function populateSummary() {
+            document.getElementById('summary-pet').textContent = `${state.booking.petName} (${state.booking.breed})`;
+            document.getElementById('summary-trimmer').textContent = state.booking.trimmer;
+            
+            const d = new Date(state.booking.date);
+            const dateStr = `${d.getMonth()+1}月${d.getDate()}日`;
+            document.getElementById('summary-datetime').textContent = `${dateStr} ${state.booking.time}〜`;
+        }
+
+        function processPayment() {
+            const btnText = document.getElementById('pay-btn-text');
+            const spinner = document.getElementById('pay-spinner');
+            
+            btnText.classList.add('opacity-0');
+            spinner.classList.remove('hidden');
+            
+            // Simulate API Call
+            setTimeout(() => {
+                navigateTo('P-05');
+            }, 1500);
+        }
+
+        // --- Toast Notification Helper ---
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => { toast.classList.remove('show'); }, 3000);
+        }
+
+        // --- Day of Service Simulation Logic ---
+        function startDayOfService() {
+            state.history = []; // Clear history to prevent going back to booking
+            navigateTo('P-06');
+            showToast("開始10分前メールからアクセスしました");
+        }
+
+        function userPressStart() {
+            const btn = document.getElementById('btn-user-start');
+            const msg = document.getElementById('msg-waiting-trimmer');
+            
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> ユーザー確認済';
+            btn.classList.remove('bg-spa-dark');
+            btn.classList.add('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
+            btn.disabled = true;
+            msg.classList.remove('hidden');
+
+            showToast("トリマーの確認を待機しています...");
+
+            // Simulate Trimmer pressing button on their end after 2 seconds
+            setTimeout(() => {
+                navigateTo('P-07');
+                startTimer();
+                showToast("相互確認完了。施術を開始します。");
+            }, 2500);
+        }
+
+        let timerInterval;
+        function startTimer() {
+            let seconds = 3599; // 59:59
+            const display = document.getElementById('timer-display');
+            
+            timerInterval = setInterval(() => {
+                seconds--;
+                const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+                const s = (seconds % 60).toString().padStart(2, '0');
+                display.textContent = `${m}:${s}`;
+                if (seconds <= 0) clearInterval(timerInterval);
+            }, 1000);
+        }
+
+        function userPressEnd() {
+            clearInterval(timerInterval);
+            
+            // Assume trimmer has also finished for this simple flow
+            showToast("トリマーと終了確認を行いました");
+            setTimeout(() => {
+                navigateTo('P-08');
+            }, 1000);
+        }
+
+    </script>
+</body>
+</html>
